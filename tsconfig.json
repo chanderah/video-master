@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES6",
+    "allowJs": true,
+    "module": "commonjs",
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "noImplicitAny": true,
+    "sourceMap": true,
+    "baseUrl": ".",
+    "outDir": "dist",
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "jsx": "react-jsx",
+    "paths": {
+      "*": ["node_modules/*"]
+    },
+    // "typeRoots": ["./node_modules/@types", "src/**/*.d.ts", "src/interfaces/core/global.d.ts"],
+    "typeRoots": ["./node_modules/@types", "./src/interfaces"],
+    "types": []
+  },
+  "include": ["src/**/*", "api/api.ts"]
+}
