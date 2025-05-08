@@ -27,7 +27,6 @@ const ImageWrapper = ({ isVideo = false, src, width, height, className }: any) =
         position: 'relative',
         width: width || 160,
         height: height || 90,
-        backgroundColor: '#eee',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',

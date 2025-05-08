@@ -6,13 +6,15 @@ const toMain = {
 };
 
 const toRenderer = {
-  //   newMessage: (data?: any) => ipcRenderer.on('newMessage', (_e, args) => data(args)),
-  //   showToast: (data: any) => ipcRenderer.on('showToast', (_e, args) => data(args)),
-  //   dismissToast: (data: any) => ipcRenderer.on('dismissToast', (_e, args) => data(args)),
-  //   infoToast: (data: any) => ipcRenderer.on('infoToast', (_e, args) => data(args)),
-  //   successToast: (data: any) => ipcRenderer.on('successToast', (_e, args) => data(args)),
-  //   errorToast: (data: any) => ipcRenderer.on('errorToast', (_e, args) => data(args)),
-  //   applicationErrorToast: (data: any) => ipcRenderer.on('applicationErrorToast', (_e, args) => data(args)),
+  //   newMessage: (callback?: any) => ipcRenderer.on('newMessage', (_e, args) => callback(args)),
+  //   showToast: (callback: any) => ipcRenderer.on('showToast', (_e, args) => callback(args)),
+  //   dismissToast: (callback: any) => ipcRenderer.on('dismissToast', (_e, args) => callback(args)),
+  //   infoToast: (callback: any) => ipcRenderer.on('infoToast', (_e, args) => callback(args)),
+  //   successToast: (callback: any) => ipcRenderer.on('successToast', (_e, args) => callback(args)),
+  //   errorToast: (callback: any) => ipcRenderer.on('errorToast', (_e, args) => callback(args)),
+  //   applicationErrorToast: (callback: any) => ipcRenderer.on('applicationErrorToast', (_e, args) => callback(args)),
+
+  consoleLog: (callback: (...args: any[]) => void) => ipcRenderer.on('consoleLog', (_e, ...args: any[]) => callback(...args)),
 };
 
 export const API = {
@@ -29,6 +31,7 @@ export const API = {
   getThumbnail: (uri: string) => ipcRenderer.invoke('getThumbnail', uri),
   getFileStat: (uri: string) => ipcRenderer.invoke('getFileStat', uri),
   convertVideo: (filePath: string, options: any) => ipcRenderer.invoke('convertVideo', filePath, options),
+  mergeVideo: (files: string[], options: any, deleteSource: boolean = false) => ipcRenderer.invoke('mergeVideo', files, options, deleteSource),
 
   //   invoke: (channel: string, args?: any) => ipcRenderer.invoke(channel, args),
   //   openFile: (uri: string) => ipcRenderer.invoke('openFile', uri),

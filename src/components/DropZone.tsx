@@ -1,11 +1,12 @@
 import { DragEvent, FC, ReactNode, useCallback, useState } from 'react';
 
 type DropZoneProps = {
-  onDropFile: (file: any[]) => void;
+  showPicker: boolean;
   children?: ReactNode;
+  onDropFile: (file: any[]) => void;
 };
 
-const DropZone: FC<DropZoneProps> = ({ onDropFile, children }) => {
+const DropZone: FC<DropZoneProps> = ({ showPicker, children, onDropFile }) => {
   const [isDragging, setIsDragging] = useState(false);
 
   const handleDragOver = useCallback((e: DragEvent) => {
@@ -31,6 +32,14 @@ const DropZone: FC<DropZoneProps> = ({ onDropFile, children }) => {
     [onDropFile]
   );
 
+  const onPickFile = async (e: any) => {
+    const files: any[] = Array.from(e.target.files);
+    if (!files.length) return;
+
+    const stats = await Promise.all(files.map((v) => window.api.getFileStat(v.path)));
+    onDropFile(stats);
+  };
+
   return (
     <div
       onDragOver={handleDragOver}
@@ -42,6 +51,7 @@ const DropZone: FC<DropZoneProps> = ({ onDropFile, children }) => {
         transition: 'background-color 0.2s',
       }}>
       {children}
+      {showPicker && <input multiple type='file' id='file' accept='video/mp4,video/x-m4v,video/*' onChange={onPickFile} />}
     </div>
   );
 };

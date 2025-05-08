@@ -16,7 +16,6 @@ const Home = () => {
 
       const files: any[] = await window.api.scanDirectory(dir, ['.mp4']);
       setFiles(files);
-      console.log('files', files);
     };
 
     run();

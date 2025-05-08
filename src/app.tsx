@@ -1,6 +1,5 @@
 import * as ReactDOM from 'react-dom/client';
 import { HashRouter as Router, Link, Routes, Route, useLocation, useNavigate, Navigate } from 'react-router-dom';
-import Home from './pages/Home';
 import { CssBaseline, IconButton, ThemeProvider } from '@mui/material';
 import { KeyboardBackspace } from '@mui/icons-material';
 import { useEffect, useMemo, useState } from 'react';
@@ -15,9 +14,8 @@ const App = () => {
   const theme = useMemo(() => getTheme(mode), [mode]);
 
   useEffect(() => {
-    console.log('theme', theme);
-    console.log(location);
-  }, [location]);
+    window.api.receive('consoleLog', console.log);
+  }, []);
 
   return (
     <ThemeProvider theme={theme}>
@@ -50,7 +48,8 @@ const App = () => {
         </nav>
 
         <Routes>
-          <Route path='/' element={<Home />} />
+          {/* <Route path='/' element={<Home />} /> */}
+          <Route path='/' element={<Navigate to='/convert' />} />
           <Route path='/join' element={<Join />} />
           <Route path='/convert' element={<Convert />} />
           <Route path='*' element={<Navigate to='/' />} />
