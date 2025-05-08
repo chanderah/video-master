@@ -18,11 +18,17 @@ const toRenderer = {
 export const API = {
   ...toMain,
   ...toRenderer,
-  invoke: (channel: string, args?: any) => ipcRenderer.invoke(channel, args),
+  receive: (channel: string, callback: (...args: any[]) => void) => {
+    // const validChannels = ['convertProgress', 'someOtherEvent'];
+    ipcRenderer.on(channel, (_e, ...args) => callback(...args));
+  },
+  send: (channel: string, ...args: any[]) => ipcRenderer.send(channel, ...args),
+  invoke: (channel: string, ...args: any[]) => ipcRenderer.invoke(channel, ...args),
   exec: (command: string) => ipcRenderer.invoke('exec', command),
   scanDirectory: (path: string, extensions: string[] = []) => ipcRenderer.invoke('scanDirectory', path, extensions),
   getThumbnail: (uri: string) => ipcRenderer.invoke('getThumbnail', uri),
   getFileStat: (uri: string) => ipcRenderer.invoke('getFileStat', uri),
+  convertVideo: (filePath: string, options: any) => ipcRenderer.invoke('convertVideo', filePath, options),
 
   //   invoke: (channel: string, args?: any) => ipcRenderer.invoke(channel, args),
   //   openFile: (uri: string) => ipcRenderer.invoke('openFile', uri),

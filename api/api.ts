@@ -138,7 +138,7 @@ export default function handleIpcMainApi(ipcMain: Electron.IpcMain, mainWindow: 
               resolve(fallbackUri);
             }
           })
-          .on('error', (err: any) => resolve(fallbackUri));
+          .on('error', (_err: any) => resolve(fallbackUri));
       });
     });
   });
@@ -151,6 +151,64 @@ export default function handleIpcMainApi(ipcMain: Electron.IpcMain, mainWindow: 
       uri,
       encodedUri,
     };
+  });
+
+  ipcMain.handle('convertVideo', async (e, filePath: string, options: any) => {
+    const { format, quality, separator, suffix } = options;
+
+    const originalDir = path.dirname(filePath);
+    const baseName = path.basename(filePath, path.extname(filePath));
+    const newName = baseName + separator + new Date().getTime() + separator + suffix + '.' + format;
+    const outputFile = path.join(originalDir, newName);
+
+    return new Promise((resolve, reject) => {
+      const command = ffmpeg(filePath)
+        .output(outputFile)
+        .on('progress', (progress) => {
+          e.sender.send('convertProgress', {
+            file: filePath,
+            percent: progress.percent,
+            time: progress.timemark,
+          });
+        })
+        .on('end', () => {
+          e.sender.send('convertProgress', {
+            file: filePath,
+            done: true,
+            percent: 100,
+            output: outputFile,
+          });
+          resolve(outputFile);
+        })
+        .on('error', (err) => {
+          e.sender.send('convertProgress', {
+            file: filePath,
+            percent: 0,
+            error: err.message,
+          });
+          reject(err);
+        });
+
+      ffmpeg.ffprobe(filePath, (_err, data) => {
+        // if (err) return
+        const { width, height } = data.streams[0];
+        const isPortrait = height > width;
+
+        if ((isPortrait && height <= 720) || (!isPortrait && width <= 720)) {
+          return resolve(filePath);
+        }
+
+        // W x H
+        if (quality === '1080p') {
+          command.size(isPortrait ? '?x1080' : '1920x?');
+        } else {
+          command.size(isPortrait ? '?x720' : '1280x?');
+        }
+
+        console.log('before', filePath, width, height);
+        command.run();
+      });
+    });
   });
 
   // ipcMain.handle('openFile', (_e, uri) => {

@@ -1,7 +1,7 @@
 import { DragEvent, FC, ReactNode, useCallback, useState } from 'react';
 
 type DropZoneProps = {
-  onDropFile: (file: any) => void;
+  onDropFile: (file: any[]) => void;
   children?: ReactNode;
 };
 
@@ -22,12 +22,11 @@ const DropZone: FC<DropZoneProps> = ({ onDropFile, children }) => {
       e.preventDefault();
       setIsDragging(false);
 
-      const file = e.dataTransfer.files[0];
-      if (!file) return;
+      const files = Array.from(e.dataTransfer.files);
+      if (!files.length) return;
 
-      console.log('file', file);
-      const fileStat = await window.api.getFileStat(file.path);
-      onDropFile(fileStat);
+      const stats = await Promise.all(files.map((v) => window.api.getFileStat(v.path)));
+      onDropFile(stats);
     },
     [onDropFile]
   );
