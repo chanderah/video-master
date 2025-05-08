@@ -20,9 +20,11 @@ export const API = {
   ...toRenderer,
   invoke: (channel: string, args?: any) => ipcRenderer.invoke(channel, args),
   exec: (command: string) => ipcRenderer.invoke('exec', command),
+  scanDirectory: (path: string, extensions: string[] = []) => ipcRenderer.invoke('scanDirectory', path, extensions),
+  getThumbnail: (uri: string) => ipcRenderer.invoke('getThumbnail', uri),
+  getFileStat: (uri: string) => ipcRenderer.invoke('getFileStat', uri),
 
   //   invoke: (channel: string, args?: any) => ipcRenderer.invoke(channel, args),
-  //   scanDirectory: (path?: string) => ipcRenderer.invoke('scanDirectory', path),
   //   openFile: (uri: string) => ipcRenderer.invoke('openFile', uri),
 };
 

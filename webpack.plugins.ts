@@ -10,8 +10,6 @@ export const plugins = [
     logger: 'webpack-infrastructure',
   }),
   new CopyPlugin({
-    patterns: [
-      { from: 'public', to: '.' }, // copies everything inside public/ to the output root
-    ],
+    patterns: [{ from: 'public', to: '.' }],
   }),
 ];
