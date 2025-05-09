@@ -6,12 +6,14 @@ import { useEffect, useMemo, useState } from 'react';
 import Join from './pages/Join';
 import Convert from './pages/Convert';
 import { getTheme } from './styles/theme';
+import { TaskQueueService } from './services/TaskQueueService';
 
 const App = () => {
-  const location = useLocation();
   const navigate = useNavigate();
+  const location = useLocation();
   const [mode, setMode] = useState<'light' | 'dark'>('dark');
   const theme = useMemo(() => getTheme(mode), [mode]);
+  const queue = new TaskQueueService(2);
 
   useEffect(() => {
     window.api.receive('consoleLog', console.log);
@@ -51,7 +53,7 @@ const App = () => {
           {/* <Route path='/' element={<Home />} /> */}
           <Route path='/' element={<Navigate to='/convert' />} />
           <Route path='/join' element={<Join />} />
-          <Route path='/convert' element={<Convert />} />
+          <Route path='/convert' element={<Convert queue={queue} />} />
           <Route path='*' element={<Navigate to='/' />} />
         </Routes>
 

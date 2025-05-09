@@ -5,14 +5,18 @@ import { Autocomplete, Button, Checkbox, IconButton, TextField } from '@mui/mate
 import { Clear, PlayArrow, Stop } from '@mui/icons-material';
 import { formatNumber } from '../utils/utils';
 import Progress from '../components/Progress';
+import { TaskQueueService } from '../services/TaskQueueService';
 
-const Convert = () => {
+type Props = {
+  queue: TaskQueueService;
+};
+
+const Convert = ({ queue }: Props) => {
   const audio = new Audio('/assets/sounds/bell.mp3');
-
   const listQuality = ['auto', '1080p', '720p'];
   const [loading, setLoading] = useState(false);
   const [videos, setVideos] = useState([]);
-  const [progress, setProgress] = useState<{ [filePath: string]: number }>({});
+  const [tasks, setTasks] = useState<{ [filePath: string]: any }>({});
   const [form, setForm] = useState({
     format: 'mp4',
     quality: '720p',
@@ -25,18 +29,18 @@ const Convert = () => {
 
   useEffect(() => {
     window.api.receive('convertProgress', (data: any) => {
-      setProgress((prev) => {
+      setTasks((prev) => {
         if (!prev[data.file]) {
           const element = document.getElementById(data.file);
           element?.scrollIntoView({ behavior: 'smooth' });
         }
-        return { ...prev, [data.file]: data.percent };
+        return { ...prev, [data.file]: data };
       });
     });
   }, []);
 
   const onDropFile = (files: File[]) => {
-    if (Object.keys(progress).length) {
+    if (Object.keys(tasks).length) {
       clearList();
     }
 
@@ -57,23 +61,24 @@ const Convert = () => {
     if (form.merge) {
       try {
         const files = videos.map((v) => v.uri);
-        const res = await window.api.mergeVideo(files, form);
+        const res = await queue.add(window.api.mergeVideo(files, form));
         console.log('Successfully converted:', res);
       } catch (err) {
         console.log('Error converting:', err);
         error++;
       }
     } else {
-      const filtered = videos.filter((v) => !progress[v.uri]);
-      for (const v of filtered) {
-        try {
-          const res = await window.api.convertVideo(v.uri, form);
-          console.log('Successfully converted:', res);
-        } catch (err) {
-          console.log('Error converting:', err);
-          error++;
-        }
-      }
+      const filtered = videos.filter((v) => !tasks[v.uri]);
+      const tasksToRun = filtered.map((v) =>
+        queue
+          .add(window.api.convertVideo(v.uri, form))
+          .then((res) => console.log('Successfully converted:', res))
+          .catch((err) => {
+            error++;
+            console.log('Error during conversion:', err);
+          })
+      );
+      await Promise.all(tasksToRun);
     }
 
     audio.load();
@@ -91,7 +96,7 @@ const Convert = () => {
   };
 
   const clearList = () => {
-    setProgress({});
+    setTasks({});
     setVideos([]);
   };
 
@@ -151,10 +156,9 @@ const Convert = () => {
             <p>{v.uri}</p>
             <p>
               {formatNumber((v.size / 1000000).toFixed(0))} MB
-              {v.newSize && <span className='font-semibold'>{` -> ${formatNumber((v.newSize / 1000000).toFixed(0))}`}</span>}
+              {tasks[v.uri]?.size && <span className='font-semibold'>{` -> ${formatNumber((tasks[v.uri].size / 1000000).toFixed(0))}`}</span>}
             </p>
-
-            {progress[v.uri] && <Progress className='mt-auto' value={progress[v.uri]} />}
+            {tasks[v.uri] && <Progress className='mt-auto' value={tasks[v.uri].percent} />}
           </div>
         </div>
       ))}

@@ -160,7 +160,7 @@ export default function handleIpcMainApi(ipcMain: Electron.IpcMain, mainWindow: 
         .size(size)
         .on('progress', (progress) => {
           const data = { ...progress, width, height };
-          e.sender.send('consoleLog', `${progress.percent.toFixed(2)}%`, `- Converting from ${width}x${height} to ${quality}`, data);
+          e.sender.send('consoleLog', `${progress.percent.toFixed(2)}%`, `- Converting from ${width}x${height} to ${size}`, data);
           e.sender.send('convertProgress', {
             file: filePath,
             percent: progress.percent,
