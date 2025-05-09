@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import DropZone from './../components/DropZone';
 import ImageWrapper from './../components/ImageWrapper';
 import { Autocomplete, Button, Checkbox, IconButton, TextField } from '@mui/material';
-import { Clear, PlayArrow } from '@mui/icons-material';
+import { Clear, PlayArrow, Stop } from '@mui/icons-material';
 import { formatNumber } from '../utils/utils';
 import Progress from '../components/Progress';
 
@@ -19,6 +19,7 @@ const Convert = () => {
     outputPath: 'relative',
     separator: '_',
     suffix: 'converted',
+    deleteSource: true,
     merge: false,
   });
 
@@ -35,8 +36,18 @@ const Convert = () => {
   }, []);
 
   const onDropFile = (files: File[]) => {
-    const data = [...videos, ...files].filter((v, i, self) => self.indexOf(v) === i);
+    if (Object.keys(progress).length) {
+      clearList();
+    }
+
+    // const data = filterUniqueArr([...videos, ...files], 'uri');
+    const data = [...videos, ...files];
     setVideos(data);
+
+    // scrollTo({
+    //   top: window.innerHeight,
+    //   behavior: 'smooth',
+    // });
   };
 
   const onClickStart = async () => {
@@ -46,7 +57,7 @@ const Convert = () => {
     if (form.merge) {
       try {
         const files = videos.map((v) => v.uri);
-        const res = await window.api.mergeVideo(files, form, true);
+        const res = await window.api.mergeVideo(files, form);
         console.log('Successfully converted:', res);
       } catch (err) {
         console.log('Error converting:', err);
@@ -75,6 +86,15 @@ const Convert = () => {
     });
   };
 
+  const onClickStop = () => {
+    window.api.stopFfmpeg().then(() => setLoading(false));
+  };
+
+  const clearList = () => {
+    setProgress({});
+    setVideos([]);
+  };
+
   return (
     <DropZone showPicker={!videos.length} onDropFile={onDropFile}>
       <div id='options' className='card flex justify-between gap-2'>
@@ -95,31 +115,38 @@ const Convert = () => {
           />
         </div>
         <div className='flex w-fit flex-col items-center justify-between'>
-          <label className='inline-flex cursor-pointer items-center'>
-            <Checkbox disabled={loading} checked={form.merge} onChange={(e) => setForm({ ...form, merge: e.target.checked })} />
-            Merge
-          </label>
+          <div className='flex flex-col'>
+            <label className='inline-flex cursor-pointer items-center'>
+              <Checkbox disabled={loading} checked={form.deleteSource} onChange={(e) => setForm({ ...form, deleteSource: e.target.checked })} />
+              Delete Source
+            </label>
+            <label>
+              <Checkbox
+                disabled={loading}
+                checked={form.merge}
+                onChange={(e) => {
+                  const merge = e.target.checked;
+                  setForm({ ...form, merge, suffix: merge ? 'merged' : 'converted' });
+                }}
+              />
+              Merge
+            </label>
+          </div>
 
           <div className='flex gap-2'>
-            <IconButton
-              disabled={loading || !videos.length}
-              color='primary'
-              onClick={() => {
-                setProgress({});
-                setVideos([]);
-              }}>
+            <IconButton disabled={loading || !videos.length} color='primary' onClick={clearList}>
               <Clear />
             </IconButton>
-            <Button variant='contained' startIcon={<PlayArrow />} disabled={loading || !videos.length} onClick={onClickStart}>
-              Start
+            <Button variant='contained' startIcon={loading ? <Stop /> : <PlayArrow />} disabled={!videos.length} onClick={loading ? onClickStop : onClickStart}>
+              {loading ? 'Stop' : 'Start'}
             </Button>
           </div>
         </div>
       </div>
 
       {videos.map((v, i) => (
-        <div key={i} id={v.uri} className='card flex justify-between gap-2'>
-          <ImageWrapper isVideo={true} src={v.uri}></ImageWrapper>
+        <div key={i} id={v.uri} className='card grid grid-cols-[auto_1fr] justify-between gap-4'>
+          <ImageWrapper src={v.uri} isVideo={true} width='120px' height='80px'></ImageWrapper>
           <div className='flex h-full flex-col'>
             <p>{v.uri}</p>
             <p>

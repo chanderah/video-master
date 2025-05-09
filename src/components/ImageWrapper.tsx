@@ -1,18 +1,18 @@
 import { useEffect, useState } from 'react';
 
 const ImageWrapper = ({ isVideo = false, src, width, height, className }: any) => {
+  const imgFallback = '/assets/images/image_placeholder.png';
   const [source, setSource] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const generateImageSource = async () => {
-      console.log('Called');
       setLoading(true);
       if (isVideo) {
         const thumbnail = await window.api.getThumbnail(src);
         setSource(thumbnail);
       } else {
-        setSource(src);
+        setSource(src ?? imgFallback);
       }
       setLoading(false);
     };
@@ -22,21 +22,15 @@ const ImageWrapper = ({ isVideo = false, src, width, height, className }: any) =
 
   return (
     <div
-      className={`image-wrapper ${className || ''}`}
+      className={`relative flex items-center justify-center ${className || ''}`}
       style={{
-        position: 'relative',
-        width: width || 160,
-        height: height || 90,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
+        ...(width && { width }),
+        ...(height && { height }),
       }}>
       {loading ? (
-        <div className='spinner' style={{ fontSize: '1.5rem' }}>
-          ⏳
-        </div>
+        <p className='text-2xl'>⏳</p>
       ) : (
-        <img src={source || '/assets/images/image_placeholder.png'} alt={'image'} className='h-full w-full object-cover' />
+        <img alt={'image'} className='h-full w-full object-cover' src={source} onError={() => setSource(imgFallback)} />
       )}
     </div>
   );

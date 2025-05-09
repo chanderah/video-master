@@ -31,7 +31,8 @@ export const API = {
   getThumbnail: (uri: string) => ipcRenderer.invoke('getThumbnail', uri),
   getFileStat: (uri: string) => ipcRenderer.invoke('getFileStat', uri),
   convertVideo: (filePath: string, options: any) => ipcRenderer.invoke('convertVideo', filePath, options),
-  mergeVideo: (files: string[], options: any, deleteSource: boolean = false) => ipcRenderer.invoke('mergeVideo', files, options, deleteSource),
+  mergeVideo: (files: string[], options: any) => ipcRenderer.invoke('mergeVideo', files, options),
+  stopFfmpeg: () => ipcRenderer.invoke('stopFfmpeg'),
 
   //   invoke: (channel: string, args?: any) => ipcRenderer.invoke(channel, args),
   //   openFile: (uri: string) => ipcRenderer.invoke('openFile', uri),
