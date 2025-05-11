@@ -4,6 +4,7 @@
   "description": "GUI for ffmpeg",
   "main": ".webpack/main",
   "scripts": {
+    "predev": "rm -rf ./.tmp",
     "dev": "npm run start",
     "start": "electron-forge start",
     "package": "electron-forge package",
@@ -26,6 +27,7 @@
     "@electron-forge/plugin-webpack": "^6.2.1",
     "@types/fluent-ffmpeg": "^2.1.27",
     "@types/react": "^18.3.21",
+    "@types/react-beautiful-dnd": "^13.1.8",
     "@types/react-dom": "^18.3.7",
     "@typescript-eslint/eslint-plugin": "^6.1.0",
     "@typescript-eslint/parser": "^6.1.0",
@@ -48,6 +50,7 @@
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.0",
+    "@hello-pangea/dnd": "^18.0.1",
     "@mui/icons-material": "^7.1.0",
     "@mui/material": "^7.1.0",
     "autoprefixer": "^10.4.14",
@@ -56,6 +59,7 @@
     "json-stringify-deterministic": "^1.0.12",
     "postcss": "^8.4.35",
     "react": "^18.3.1",
+    "react-beautiful-dnd": "^13.1.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^7.5.3",
     "tailwindcss": "3.3.3"

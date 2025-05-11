@@ -6,7 +6,7 @@ type DropZoneProps = {
   onDropFile: (file: any[]) => void;
 };
 
-const DropZone: FC<DropZoneProps> = ({ showPicker, children, onDropFile }) => {
+const FileDropZone: FC<DropZoneProps> = ({ showPicker, children, onDropFile }) => {
   const [isDragging, setIsDragging] = useState(false);
 
   const handleDragOver = useCallback((e: DragEvent) => {
@@ -56,4 +56,4 @@ const DropZone: FC<DropZoneProps> = ({ showPicker, children, onDropFile }) => {
   );
 };
 
-export default DropZone;
+export default FileDropZone;

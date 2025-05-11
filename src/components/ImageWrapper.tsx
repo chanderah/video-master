@@ -24,8 +24,8 @@ const ImageWrapper = ({ isVideo = false, src, width, height, className }: any) =
     <div
       className={`relative flex items-center justify-center ${className || ''}`}
       style={{
-        ...(width && { width }),
-        ...(height && { height }),
+        width: width || 'auto',
+        height: height || 'auto',
       }}>
       {loading ? (
         <p className='text-2xl'>⏳</p>

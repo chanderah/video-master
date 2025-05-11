@@ -7,7 +7,7 @@ const Progress = (props: LinearProgressProps & { value: number; className?: stri
         <Box sx={{ width: '100%', mr: 1 }}>
           <LinearProgress variant='determinate' {...props} />
         </Box>
-        <Box sx={{ minWidth: 35 }}>
+        <Box sx={{ width: 'auto' }}>
           <Typography variant='body2' sx={{ color: 'text.secondary' }}>
             {props.value === 100 ? '✅' : `${Math.round(props.value)}%`}
           </Typography>

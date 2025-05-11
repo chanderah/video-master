@@ -1,11 +1,13 @@
-import { BrowserWindow } from 'electron';
+import { BrowserWindow, shell } from 'electron';
 import { exec } from 'child_process';
 import { readdirSync, statSync } from 'fs';
 import path from 'path';
 import ffmpeg from 'fluent-ffmpeg';
 import fs from 'fs';
+import { VideoProgress } from '../src/interfaces/video';
 
-let command!: ffmpeg.FfmpegCommand;
+let commands: { [id: string]: ffmpeg.FfmpegCommand } = {};
+// let isStopped: boolean = false;
 
 export default function handleIpcMainApi(ipcMain: Electron.IpcMain, mainWindow: BrowserWindow) {
   ipcMain.handle('exec', (_e, command: string) => {
@@ -47,28 +49,6 @@ export default function handleIpcMainApi(ipcMain: Electron.IpcMain, mainWindow: 
     return result
       .filter((v) => !queries.length || queries.some((q) => v.name.toLowerCase().includes(q.toLowerCase())))
       .sort((a, b) => +b.isDirectory - +a.isDirectory);
-
-    // return readdirSync(path, { withFileTypes: true })
-    //   .map((v) => {
-    //     const uri = `${path}/${v.name}`;
-    //     const encodedUri = encodeURI(uri);
-    //     const stat = statSync(uri);
-    //     return {
-    //       ...v,
-    //       path,
-    //       uri,
-    //       encodedUri,
-    //       isDirectory: v.isDirectory(),
-    //       stat,
-    //     };
-    //   })
-    //   .filter((entry) => {
-    //     if (entry.isDirectory || !queries.length) return true;
-
-    //     const lowerName = entry.name?.toLowerCase() ?? '';
-    //     return queries.some((v) => lowerName.includes(v.toLowerCase()));
-    //   })
-    //   .sort((a, b) => +b.isDirectory - +a.isDirectory);
   });
 
   ipcMain.handle('getThumbnail', async (_e, uri: string) => {
@@ -118,54 +98,56 @@ export default function handleIpcMainApi(ipcMain: Electron.IpcMain, mainWindow: 
     };
   });
 
-  ipcMain.handle('stopFfmpeg', async (e) => {
-    command?.kill('SIGKILL');
-    command = null;
+  ipcMain.handle('openFile', (_e, uri) => {
+    return shell.openPath(uri);
+  });
+
+  ipcMain.handle('stopFfmpeg', async (e, taskId: string) => {
+    commands[taskId]?.kill('SIGKILL');
+    delete commands[taskId];
+
     e.sender.send('consoleLog', 'Process stopped.');
   });
 
-  ipcMain.handle('convertVideo', async (e, filePath: string, options: any) => {
+  ipcMain.handle('convertVideo', async (e, taskId: string, filePath: string, options: any) => {
     const { format, quality, separator, suffix, deleteSource } = options;
     const outputFile = getOutputFilePath(filePath, format, separator, suffix);
 
+    console.log('taskId, filePath', taskId, filePath);
+
     return new Promise(async (resolve, reject) => {
-      const { width, height } = await getVideoMetadata(filePath);
+      const { width, height, size } = await getVideoMetadata(filePath);
       const isPortrait = height > width;
 
       if ((quality === '1080p' && !isAbove1080p(width, height)) || (quality === '720p' && !isAbove720p(width, height))) {
         deleteSource ? fs.renameSync(filePath, outputFile) : fs.copyFileSync(filePath, outputFile);
 
-        e.sender.send('convertProgress', {
-          file: filePath,
-          done: true,
-          percent: 100,
-          output: outputFile,
-        });
+        e.sender.send('convertProgress', getProgress(taskId, filePath, outputFile, size, 100, width, height));
         return resolve(outputFile);
       }
 
-      let size;
+      let newSize;
       if (quality === '1080p') {
         // Portrait: 1080x1920
         // Landscape: 1920x1080
-        size = isPortrait ? '1080x?' : '?x1080';
+        newSize = isPortrait ? '1080x?' : '?x1080';
       } else {
         // Portrait: 720x1280
         // Landscape: 1280×720
-        size = isPortrait ? '720x?' : '?x720';
+        newSize = isPortrait ? '720x?' : '?x720';
       }
 
-      command = ffmpeg(filePath)
+      let targetFileSize = 0;
+      commands[taskId] = ffmpeg(filePath)
         .output(outputFile)
-        .size(size)
+        .size(newSize)
         .on('progress', (progress) => {
-          const data = { ...progress, width, height };
-          e.sender.send('consoleLog', `${progress.percent.toFixed(2)}%`, `- Converting from ${width}x${height} to ${size}`, data);
-          e.sender.send('convertProgress', {
-            file: filePath,
-            percent: progress.percent,
-            time: progress.timemark,
-          });
+          // const data = { ...progress, width, height };
+          // e.sender.send('consoleLog', `${progress.percent.toFixed(2)}%`, `- Converting from ${width}x${height} to ${newSize}`, data);
+
+          console.log('progress.targetSize', progress.targetSize);
+          targetFileSize = progress.targetSize * 1000;
+          e.sender.send('convertProgress', getProgress(taskId, filePath, outputFile, targetFileSize, progress.percent, width, height));
         })
         .on('end', () => {
           const { mtime } = fs.statSync(filePath);
@@ -176,56 +158,48 @@ export default function handleIpcMainApi(ipcMain: Electron.IpcMain, mainWindow: 
               if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
             }
 
-            e.sender.send('convertProgress', {
-              file: filePath,
-              done: true,
-              percent: 100,
-              output: outputFile,
-            });
+            e.sender.send('convertProgress', getProgress(taskId, filePath, outputFile, targetFileSize, 100, width, height));
             resolve(outputFile);
           });
         })
         .on('error', (err) => {
-          e.sender.send('convertProgress', {
-            file: filePath,
-            percent: 0,
-            error: err.message,
-          });
+          e.sender.send('convertProgress', getProgress(taskId, filePath, outputFile, targetFileSize, -1, width, height));
+          fs.rmSync(outputFile);
           reject(err);
         });
 
-      command.run();
+      commands[taskId].run();
     });
   });
 
-  ipcMain.handle('mergeVideo', async (e, files: string[], options: any) => {
+  ipcMain.handle('mergeVideo', async (e, taskId: string, files: string[], options: any) => {
     if (files.length < 2) throw new Error('At least 2 videos are required to merge.');
 
     return new Promise(async (resolve, reject) => {
       const { format, separator, suffix, deleteSource } = options;
-      let metadata = await getLowestQualityVideo(files); // lowest
-      const { filePath } = metadata;
+      let { filePath, width, height } = await getLowestQualityVideo(files); // lowest
       const outputFile = getOutputFilePath(filePath, format, separator, suffix);
 
-      command = ffmpeg();
-      files.forEach((file) => command.input(file));
+      commands[taskId] = ffmpeg();
+      files.forEach((file) => commands[taskId].input(file));
 
-      if (isAbove720p(metadata.width, metadata.height)) {
-        const resolution = getNewResolution('720p', metadata.width, metadata.height);
-        mainWindow.webContents.send('consoleLog', `Changing resolution from ${metadata.width}x${metadata.height} to ${resolution.width}x${resolution.height}`);
+      if (isAbove720p(width, height)) {
+        const resolution = getNewResolution('720p', width, height);
+        e.sender.send('consoleLog', `Changing resolution from ${width}x${height} to ${resolution.width}x${resolution.height}`);
 
-        metadata.width = resolution.width;
-        metadata.height = resolution.height;
+        width = resolution.width;
+        height = resolution.height;
       }
 
       const totalDuration = await getTotalDuration(files);
 
       const filters = files.map((_, i) => {
-        return `[${i}:v]scale=w=${metadata.width}:h=${metadata.height}:force_original_aspect_ratio=decrease,pad=${metadata.width}:${metadata.height}:(ow-iw)/2:(oh-ih)/2[v${i}]`;
+        return `[${i}:v]scale=w=${width}:h=${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2[v${i}]`;
       });
       const filterGraph = [...filters, files.map((_, i) => `[v${i}][${i}:a]`).join('') + `concat=n=${files.length}:v=1:a=1[outv][outa]`];
 
-      command
+      let targetFileSize = 0;
+      commands[taskId]
         .complexFilter(filterGraph, ['outv', 'outa'])
         .outputOptions('-preset fast')
         .output(outputFile)
@@ -233,29 +207,18 @@ export default function handleIpcMainApi(ipcMain: Electron.IpcMain, mainWindow: 
           const currentTime = parseTimemark(progress.timemark);
           const percent = Math.min((currentTime / totalDuration) * 100, 100);
 
-          const data = { ...progress, percent, width: metadata.width, height: metadata.height };
-          e.sender.send('consoleLog', `${percent.toFixed(2)}%`, `- Merging to ${data.width}x${data.height}`, data);
+          // const data = { ...progress, percent, width, height, file, size: progress.targetSize };
+          // e.sender.send('consoleLog', `${percent.toFixed(2)}%`, `- Merging to ${data.width}x${data.height}`, data);
 
-          files.forEach((v) => {
-            e.sender.send('convertProgress', {
-              percent,
-              file: v,
-              time: progress.timemark,
-            });
-          });
+          targetFileSize = progress.targetSize;
+          e.sender.send('convertProgress', getProgress(taskId, null, outputFile, targetFileSize, percent, width, height));
         })
         .on('end', () => {
           const { mtime } = fs.statSync(filePath);
           fs.utimes(outputFile, mtime, mtime, (err) => {
             if (err) return reject(err);
 
-            files.forEach((v) => {
-              e.sender.send('convertProgress', {
-                file: v,
-                percent: 100,
-                done: true,
-              });
-            });
+            e.sender.send('convertProgress', getProgress(taskId, null, outputFile, targetFileSize, 100, width, height));
 
             if (deleteSource && fs.existsSync(outputFile)) {
               for (const v of files) {
@@ -265,40 +228,42 @@ export default function handleIpcMainApi(ipcMain: Electron.IpcMain, mainWindow: 
             resolve(outputFile);
           });
         })
-        .on('error', (err) => reject(err))
-        .run();
+        .on('error', (err) => {
+          e.sender.send('convertProgress', getProgress(taskId, null, outputFile, targetFileSize, -1, width, height));
+          fs.rmSync(outputFile);
+          reject(err);
+        });
+
+      commands[taskId].run();
     });
   });
 }
 
-// ipcMain.handle('openFile', (_e, uri) => {
-//   return shell.openPath(uri);
-// });
+function getProgress(taskId: string, file: string, outputFile: string, size: number, percent: number, width: number, height: number): VideoProgress {
+  return { taskId, file, outputFile, size, percent, width, height, done: percent === 100 };
+}
 
-export function getVideoMetadata(filePath: string): Promise<any> {
+// FUNCTIONS
+function getVideoMetadata(filePath: string): Promise<any> {
   return new Promise((resolve, reject) => {
     ffmpeg.ffprobe(filePath, (err, metadata) => {
       if (err) return reject(err);
 
-      console.log('called');
-
       const videoStream = metadata.streams.find((s) => s.codec_type === 'video');
-      console.log('videoStream', videoStream);
       if (!videoStream) return reject(new Error('No video stream found'));
-
-      console.log('called');
 
       resolve({
         filePath,
         width: videoStream.width,
         height: videoStream.height,
+        size: fs.statSync(filePath).size,
         bitrate: parseInt(videoStream.bit_rate || '0', 10),
       });
     });
   });
 }
 
-export async function getLowestQualityVideo(files: string[]) {
+async function getLowestQualityVideo(files: string[]) {
   const metas = await Promise.all(files.map(getVideoMetadata));
   metas.sort((a, b) => {
     const areaA = a.width * a.height;
@@ -332,15 +297,19 @@ function getNewResolution(quality: '1080p' | '720p', width: number, height: numb
 }
 
 function isAbove720p(width: number, height: number) {
-  const totalPixels = width * height;
-  const threshold = 1280 * 720;
-  return totalPixels > threshold;
+  // const totalPixels = width * height;
+  // const threshold = 1280 * 720;
+  // return totalPixels > threshold;
+  const isPortrait = height > width;
+  return isPortrait ? width > 720 : height > 720;
 }
 
 function isAbove1080p(width: number, height: number) {
-  const totalPixels = width * height;
-  const threshold = 1920 * 1080;
-  return totalPixels > threshold;
+  // const totalPixels = width * height;
+  // const threshold = 1920 * 1080;
+  // return totalPixels > threshold;
+  const isPortrait = height > width;
+  return isPortrait ? width > 1080 : height > 1080;
 }
 
 function parseTimemark(t: string): number {
@@ -358,7 +327,7 @@ function getVideoDuration(filePath: string): Promise<number> {
   });
 }
 
-export async function getTotalDuration(files: string[]): Promise<number> {
+async function getTotalDuration(files: string[]): Promise<number> {
   const durations = await Promise.all(files.map(getVideoDuration));
   return durations.reduce((acc, dur) => acc + dur, 0);
 }

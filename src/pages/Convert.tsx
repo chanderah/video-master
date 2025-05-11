@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
-import DropZone from './../components/DropZone';
-import ImageWrapper from './../components/ImageWrapper';
-import { Autocomplete, Button, Checkbox, IconButton, TextField } from '@mui/material';
+import { Autocomplete, Button, Checkbox, CircularProgress, IconButton, TextField } from '@mui/material';
 import { Clear, PlayArrow, Stop } from '@mui/icons-material';
+import { TaskQueueService } from '../services/TaskQueueService';
+import { VideoProgress } from '../interfaces/video';
+import FileDropZone from '../components/FileDropZone';
+import { DragDropList } from '../components/DragDropList';
+import ImageWrapper from '../components/ImageWrapper';
 import { formatNumber } from '../utils/utils';
 import Progress from '../components/Progress';
-import { TaskQueueService } from '../services/TaskQueueService';
 
 type Props = {
   queue: TaskQueueService;
@@ -16,7 +18,7 @@ const Convert = ({ queue }: Props) => {
   const listQuality = ['auto', '1080p', '720p'];
   const [loading, setLoading] = useState(false);
   const [videos, setVideos] = useState([]);
-  const [tasks, setTasks] = useState<{ [filePath: string]: any }>({});
+  const [tasks, setTasks] = useState<{ [id: string]: VideoProgress }>({});
   const [form, setForm] = useState({
     format: 'mp4',
     quality: '720p',
@@ -28,16 +30,21 @@ const Convert = ({ queue }: Props) => {
   });
 
   useEffect(() => {
-    window.api.receive('convertProgress', (data: any) => {
+    window.api.receive('convertProgress', (data: VideoProgress) => {
       setTasks((prev) => {
-        if (!prev[data.file]) {
-          const element = document.getElementById(data.file);
-          element?.scrollIntoView({ behavior: 'smooth' });
-        }
-        return { ...prev, [data.file]: data };
+        // if (!form.merge && !prev[data.file]) {
+        //   const element = document.getElementById(data.file);
+        //   element?.scrollIntoView({ behavior: 'smooth' });
+        // }
+
+        return { ...prev, [data.taskId]: { ...data, file: prev[data.taskId].file, running: data.percent < 100 } };
       });
     });
   }, []);
+
+  useEffect(() => {
+    console.log(videos);
+  }, [videos]);
 
   const onDropFile = (files: File[]) => {
     if (Object.keys(tasks).length) {
@@ -59,26 +66,38 @@ const Convert = ({ queue }: Props) => {
 
     let error = 0;
     if (form.merge) {
-      try {
-        const files = videos.map((v) => v.uri);
-        const res = await queue.add(window.api.mergeVideo(files, form));
-        console.log('Successfully converted:', res);
-      } catch (err) {
-        console.log('Error converting:', err);
-        error++;
-      }
+      const filesUri = videos.map((v) => v.uri);
+      const taskId = queue.generateTaskId();
+      const task = queue.add(() => window.api.mergeVideo(taskId, filesUri, form));
+      tasks[taskId] = { file: filesUri.join('|'), percent: 0 } as VideoProgress; // this
+
+      console.log('tasks[taskId]', tasks[taskId]);
+      await task.promise
+        .then((res) => {
+          console.log('Successfully converted:', res);
+        })
+        .catch((err) => {
+          console.log('Error converting:', err);
+        });
     } else {
-      const filtered = videos.filter((v) => !tasks[v.uri]);
-      const tasksToRun = filtered.map((v) =>
-        queue
-          .add(window.api.convertVideo(v.uri, form))
+      const pendingTasks = videos.filter((v) => !tasks[v.uri]);
+      const tasksToRun = pendingTasks.map((v) => {
+        const taskId = queue.generateTaskId();
+        const task = queue.add(() => window.api.convertVideo(taskId, v.uri, form));
+        tasks[taskId] = { file: v.uri, percent: 0 } as VideoProgress;
+        return task;
+      });
+
+      const taskPromises = tasksToRun.map((v) => v.promise);
+      taskPromises.forEach((promise) =>
+        promise
           .then((res) => console.log('Successfully converted:', res))
           .catch((err) => {
             error++;
             console.log('Error during conversion:', err);
           })
       );
-      await Promise.all(tasksToRun);
+      await Promise.all(taskPromises);
     }
 
     audio.load();
@@ -92,7 +111,13 @@ const Convert = ({ queue }: Props) => {
   };
 
   const onClickStop = () => {
-    window.api.stopFfmpeg().then(() => setLoading(false));
+    // window.api.stopFfmpeg().then(() => setLoading(false));
+
+    Object.keys(tasks).forEach(async (id) => {
+      const isRemoved = queue.remove(id);
+      if (!isRemoved) await window.api.stopFfmpeg(id);
+    });
+    setLoading(false);
   };
 
   const clearList = () => {
@@ -101,7 +126,7 @@ const Convert = ({ queue }: Props) => {
   };
 
   return (
-    <DropZone showPicker={!videos.length} onDropFile={onDropFile}>
+    <FileDropZone showPicker={!videos.length} onDropFile={onDropFile}>
       <div id='options' className='card flex justify-between gap-2'>
         <div className='grid w-full grid-cols-[auto_1fr] items-center gap-4'>
           <p className='font-semibold'>Output Path:</p>
@@ -149,20 +174,31 @@ const Convert = ({ queue }: Props) => {
         </div>
       </div>
 
-      {videos.map((v, i) => (
-        <div key={i} id={v.uri} className='card grid grid-cols-[auto_1fr] justify-between gap-4'>
-          <ImageWrapper src={v.uri} isVideo={true} width='120px' height='80px'></ImageWrapper>
-          <div className='flex h-full flex-col'>
-            <p>{v.uri}</p>
-            <p>
-              {formatNumber((v.size / 1000000).toFixed(0))} MB
-              {tasks[v.uri]?.size && <span className='font-semibold'>{` -> ${formatNumber((tasks[v.uri].size / 1000000).toFixed(0))}`}</span>}
-            </p>
-            {tasks[v.uri] && <Progress className='mt-auto' value={tasks[v.uri].percent} />}
-          </div>
-        </div>
-      ))}
-    </DropZone>
+      <DragDropList items={videos} setItems={setVideos} getKey={(v) => v.uri}>
+        {(v, i) => {
+          const task = Object.values(tasks).find((task) => task.file.includes(v.uri));
+          return (
+            <div key={i} id={v.uri} className='card grid grid-cols-[auto_1fr] justify-between gap-4' onClick={() => window.api.openFile(v.uri)}>
+              <ImageWrapper isVideo={true} src={v.uri} width='120px' height='80px' className='!cursor-pointer'></ImageWrapper>
+              <div className='flex h-full flex-col'>
+                <div className='grid w-full grid-cols-[1fr_auto] items-center justify-between gap-2'>
+                  <p>{v.uri}</p>
+                  <CircularProgress size='16px' className='ml-auto' style={{ visibility: task?.running ? 'visible' : 'hidden' }} />
+
+                  <p>{formatNumber((v.size / 1000000).toFixed(0))} MB</p>
+                  {task?.size && <p>{formatNumber(task.size / 1000000)} MB</p>}
+                </div>
+                {(task?.running || task?.done) && <Progress className='mt-auto' value={task.percent} />}
+              </div>
+            </div>
+            // <div key={v.uri} className='video-item'>
+            //   <p>{v.uri}</p>
+            //   <p>{v.size} MB</p>
+            // </div>
+          );
+        }}
+      </DragDropList>
+    </FileDropZone>
   );
 };
 
